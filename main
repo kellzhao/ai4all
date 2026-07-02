@@ -1,0 +1,6 @@
+import pandas as pd
+
+df = pd.read_csv("diabetes_012_health_indicators_BRFSS2015.csv")
+
+print(df.shape)
+print(df.head())
