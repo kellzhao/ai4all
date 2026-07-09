@@ -1,6 +1,233 @@
 import pandas as pd
 
-df = pd.read_csv("diabetes_012_health_indicators_BRFSS2015.csv")
+# We are using the binary one for model analysis (0 - no diabetes, 1 - prediabetes & diabetes)
+df = pd.read_csv("diabetes_binary_health_indicators_BRFSS2015.csv")
+
+# Using this only for data analysis (0 - no diabetes, 1 - prediabetes, 2 - diabetes)
+df_data = pd.read_csv("diabetes_012_health_indicators_BRFSS2015.csv")
 
 print(df.shape)
 print(df.head())
+
+#DATA SET UP
+
+target_col = "Diabetes_binary"
+
+binary_cols = [
+  "HighBP",
+  "HighChol",
+  "CholCheck",
+  "Smoker",
+  "Stroke",
+  "HeartDiseaseorAttack",
+  "PhysActivity",
+  "Fruits",
+  "Veggies",
+  "HvyAlcoholConsump",
+  "AnyHealthcare",
+  "NoDocbcCost",
+  "DiffWalk",
+  "Sex"
+]
+
+ordinal_cols = [
+  "GenHlth",
+  "Age",
+  "Education",
+  "Income"
+]
+
+numeric_cols = [
+  "BMI",
+  "MentHlth",
+  "PhysHlth"
+]
+
+demographic_cols = [
+  "Sex",
+  "Age",
+  "Education",
+  "Income"
+]
+
+predictor_cols = binary_cols + ordinal_cols + numeric_cols
+
+column_labels = {
+  "Diabetes_binary": "Diabetes Status",
+  "HighBP": "High Blood Pressure",
+  "HighChol": "High Cholesterol",
+  "CholCheck": "Cholesterol Check",
+  "BMI": "Body Mass Index",
+  "Smoker": "Smoker",
+  "Stroke": "Stroke",
+  "HeartDiseaseorAttack": "Heart Disease or Heart Attack",
+  "PhysActivity": "Physical Activity",
+  "Fruits": "Consumes Fruit",
+  "Veggies": "Consumes Vegetables",
+  "HvyAlcoholConsump": "Heavy Alcohol Consumption",
+  "AnyHealthcare": "Has Healthcare",
+  "NoDocbcCost": "Skipped Doctor Due to Cost",
+  "GenHlth": "General Health",
+  "MentHlth": "Days of Poor Mental Health",
+  "PhysHlth": "Days of Poor Physical Health",
+  "DiffWalk": "Difficulty Walking",
+  "Sex": "Sex",
+  "Age": "Age Category",
+  "Education": "Education Level",
+  "Income": "Income Level"
+}
+
+target_labels = {
+  0.0: "No diabetes",
+  1.0: "Prediabetes or diabetes"
+}
+
+#FUNCTIONS
+
+def get_summary_stats(df):
+  return df.describe()
+
+#File should be pre-cleaned meaning 0 missing values
+def check_missing_values(df):
+  return df.isnull().sum()
+
+def check_total_missing_values(df):
+  return df.isnull().sum().sum()
+
+def find_extreme_outliers_iqr(df, col):
+  q1 = df[col].quantile(0.25)
+  q3 = df[col].quantile(0.75)
+  iqr = q3 - q1
+  lower_bound = q1 - 1.5 * iqr
+  upper_bound = q3 + 1.5 * iqr
+  return df[(df[col] < lower_bound) | (df[col] > upper_bound)]
+
+def get_outlier_counts(df, target_col):
+  numeric_cols = df.drop(columns=[target_col]).select_dtypes(include="number").columns
+  outlier_counts = {}
+
+  for col in numeric_cols:
+    outlier_counts[col] = len(find_extreme_outliers_iqr(df, col))
+
+  return pd.Series(outlier_counts).sort_values(ascending=False)
+
+def summarize_target_by_column(df, col, target_col):
+  return (
+    df.groupby(col)[target_col]
+    .agg(["count", "mean"])
+    .reset_index()
+    .rename(columns={
+      col: "value",
+      "count": "response_count",
+      "mean": "diabetes_rate"
+    })
+  )
+
+def get_all_target_summaries(df, columns, target_col):
+  summaries = {}
+
+  for col in columns:
+    summaries[col] = summarize_target_by_column(df, col, target_col)
+
+  return summaries
+
+def get_correlation_matrix(df, columns):
+  return df[columns].corr()
+
+def check_group_representation(df, group_col):
+  return df[group_col].value_counts(normalize=True).sort_index()
+
+def compare_diabetes_rate_by_group(df, group_col, target_col):
+  return df.groupby(group_col)[target_col].mean().sort_index()
+
+def bias_audit_by_group(df, group_col, target_col):
+  representation = check_group_representation(df, group_col)
+  diabetes_rates = compare_diabetes_rate_by_group(df, group_col, target_col)
+  response_counts = df[group_col].value_counts().sort_index()
+
+  audit = pd.DataFrame({
+    "response_count": response_counts,
+    "group_representation": representation,
+    "diabetes_rate": diabetes_rates
+  })
+
+  return audit
+
+def get_all_bias_audits(df, group_cols, target_col):
+  audits = {}
+
+  for col in group_cols:
+    audits[col] = bias_audit_by_group(df, col, target_col)
+
+  return audits
+
+def check_column_groups(df):
+  expected_cols = [target_col] + predictor_cols
+  missing_cols = [col for col in expected_cols if col not in df.columns]
+  extra_cols = [col for col in df.columns if col not in expected_cols]
+
+  return {
+    "missing_cols": missing_cols,
+    "extra_cols": extra_cols
+  }
+
+visualization_data = {
+  "target_col": target_col,
+  "predictor_cols": predictor_cols,
+  "binary_cols": binary_cols,
+  "ordinal_cols": ordinal_cols,
+  "numeric_cols": numeric_cols,
+  "demographic_cols": demographic_cols,
+  "column_labels": column_labels,
+  "target_labels": target_labels,
+  "target_summaries": get_all_target_summaries(df, predictor_cols, target_col),
+  "correlation_matrix": get_correlation_matrix(df, predictor_cols + [target_col]),
+  "bias_audits": get_all_bias_audits(df, demographic_cols, target_col)
+}
+
+#PRINT STATEMENTS
+
+print("\nSummary statistics:")
+print(get_summary_stats(df))
+
+print("\nMissing values per column:")
+print(check_missing_values(df))
+
+print(f"\nTotal missing values overall: {check_total_missing_values(df)}")
+
+print("\nPotential outlier counts by predictor column:")
+print(get_outlier_counts(df, target_col))
+
+print(f"\nNumber of potential covariates/predictors: {len(predictor_cols)}")
+print(f"Potential predictors: {predictor_cols}")
+
+print("\nColumn groups for future visualizations:")
+print(f"Binary columns for bar charts: {binary_cols}")
+print(f"Ordinal columns for grouped bar/line charts: {ordinal_cols}")
+print(f"Numeric columns for histograms, boxplots, and scatter plots: {numeric_cols}")
+print(f"Demographic columns for bias audits: {demographic_cols}")
+
+print(f"\nDependent variable / target variable: {target_col}")
+print("0 = no diabetes, 1 = prediabetes or diabetes")
+
+print("\nTarget class counts:")
+print(df[target_col].value_counts())
+
+print("\nTarget class proportions:")
+print(df[target_col].value_counts(normalize=True))
+
+print("\nColumn group check:")
+print(check_column_groups(df))
+
+print("\nCorrelation with target variable:")
+print(visualization_data["correlation_matrix"][target_col].sort_values(ascending=False))
+
+print("\nExample visualization-ready summary: diabetes rate by HighBP")
+print(visualization_data["target_summaries"]["HighBP"])
+
+print("\nBias audit results:")
+for col in demographic_cols:
+  print(f"\nBias audit by {column_labels[col]}:")
+  print(visualization_data["bias_audits"][col])
+
+  
