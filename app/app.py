@@ -8,6 +8,31 @@ st.set_page_config(page_title="XAI Diabetes Health Risk Reporter", layout="wide"
 
 YES_NO = {"No": 0, "Yes": 1}
 
+# Risk bands are informational cutoffs for framing the score, not clinical
+# thresholds — roughly centered on the ~14% positive rate in the training data.
+RISK_BANDS = [
+    (0.15, "Low", "#0ca30c", "#e8f7e8"),
+    (0.35, "Moderate", "#fab219", "#fff6e0"),
+    (1.01, "High", "#d03b3b", "#fbe9e9"),
+]
+
+
+def risk_band(proba):
+    for cutoff, label, color, bg in RISK_BANDS:
+        if proba < cutoff:
+            return label, color, bg
+    return RISK_BANDS[-1][1:]
+
+
+RISK_COPY = {
+    "Low": "Your estimated risk is below where the model typically flags concern. "
+    "Keeping up habits like regular activity and a balanced diet helps keep it there.",
+    "Moderate": "Your estimated risk is elevated relative to the average patient in "
+    "this dataset. It's worth discussing the factors below with a healthcare provider.",
+    "High": "Your estimated risk is substantially elevated. We'd recommend reviewing "
+    "the factors below with a healthcare provider soon.",
+}
+
 GENHLTH = {"Excellent": 1, "Very good": 2, "Good": 3, "Fair": 4, "Poor": 5}
 
 AGE_GROUPS = {
@@ -104,18 +129,44 @@ def main():
     if st.sidebar.button("Calculate risk", type="primary"):
         row = pd.DataFrame([inputs])[feature_names]
         proba = model.predict_proba(row)[0, 1]
+        label, color, bg = risk_band(proba)
 
+        st.markdown(
+            f"""<span style="background:{bg}; color:{color}; border:1px solid {color};
+            border-radius:999px; padding:0.2rem 0.85rem; font-weight:600;
+            font-size:0.85rem;">{label} risk</span>""",
+            unsafe_allow_html=True,
+        )
         st.metric("Estimated probability of diabetes / prediabetes", f"{proba:.0%}")
+        st.caption(RISK_COPY[label])
 
         col1, col2 = st.columns([2, 1])
         with col1:
             st.subheader("What's driving this score")
+            st.caption(
+                "Each bar is one health factor, sized by how much it alone "
+                "pushed your estimate up (red) or down (blue) relative to "
+                "having no effect."
+            )
             fig = waterfall_figure(model, row)
             st.pyplot(fig, clear_figure=True)
+            with st.expander("How to read this chart"):
+                st.markdown(
+                    "- The title line shows **baseline risk** (the model's "
+                    "average prediction across everyone in the training "
+                    "data) next to **your estimate**.\n"
+                    "- Each bar below is one of your inputs, ordered by how "
+                    "much it mattered to this prediction, longest at top.\n"
+                    "- **Red** bars raise your risk estimate; **blue** bars "
+                    "lower it. Longer bars mean a bigger effect.\n"
+                    "- Values are in log-odds, the model's internal scoring "
+                    "units, not percentage points — so bar sizes show "
+                    "*relative* influence rather than a direct percent change."
+                )
         with col2:
             st.subheader("In plain English")
             drivers = summarize_top_drivers(model, row)
-            st.write(f"Your estimated risk is {proba:.0%}, {drivers}.")
+            st.write(f"Your estimated risk is **{proba:.0%}**, {drivers}.")
             st.caption(
                 "This reflects patterns in survey data, not a clinical "
                 "diagnosis. Lifestyle factors here (activity, diet, BMI) "
