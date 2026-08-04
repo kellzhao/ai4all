@@ -8,29 +8,31 @@ st.set_page_config(page_title="XAI Diabetes Health Risk Reporter", layout="wide"
 
 YES_NO = {"No": 0, "Yes": 1}
 
-# Risk bands are informational cutoffs for framing the score, not clinical
-# thresholds — roughly centered on the ~14% positive rate in the training data.
-RISK_BANDS = [
-    (0.15, "Low", "#0ca30c", "#e8f7e8"),
-    (0.35, "Moderate", "#fab219", "#fff6e0"),
-    (1.01, "High", "#d03b3b", "#fbe9e9"),
-]
+# Chosen in the notebook's threshold sweep (xgboost_model.ipynb, section 6) to
+# favor recall on the positive class: 0.92 recall / 0.24 precision at this cutoff,
+# vs. 0.79 recall / 0.30 precision at the default 0.50 — this model is meant to
+# flag more people for follow-up rather than miss true cases.
+DECISION_THRESHOLD = 0.30
 
-
-def risk_band(proba):
-    for cutoff, label, color, bg in RISK_BANDS:
-        if proba < cutoff:
-            return label, color, bg
-    return RISK_BANDS[-1][1:]
-
-
-RISK_COPY = {
-    "Low": "Your estimated risk is below where the model typically flags concern. "
-    "Keeping up habits like regular activity and a balanced diet helps keep it there.",
-    "Moderate": "Your estimated risk is elevated relative to the average patient in "
-    "this dataset. It's worth discussing the factors below with a healthcare provider.",
-    "High": "Your estimated risk is substantially elevated. We'd recommend reviewing "
-    "the factors below with a healthcare provider soon.",
+FLAG_COPY = {
+    True: (
+        "Elevated",
+        "#d03b3b",
+        "#fbe9e9",
+        "Your estimated probability is at or above the model's screening "
+        "threshold ({threshold:.0%}). That threshold is tuned to catch most "
+        "true cases, which also means it flags more people than actually "
+        "have the condition — treat this as a prompt to talk to a healthcare "
+        "provider, not a diagnosis.",
+    ),
+    False: (
+        "Below threshold",
+        "#0ca30c",
+        "#e8f7e8",
+        "Your estimated probability is below the model's screening threshold "
+        "({threshold:.0%}). This isn't a guarantee — talk to a healthcare "
+        "provider if you have other concerns.",
+    ),
 }
 
 GENHLTH = {"Excellent": 1, "Very good": 2, "Good": 3, "Fair": 4, "Poor": 5}
@@ -129,16 +131,16 @@ def main():
     if st.sidebar.button("Calculate risk", type="primary"):
         row = pd.DataFrame([inputs])[feature_names]
         proba = model.predict_proba(row)[0, 1]
-        label, color, bg = risk_band(proba)
+        label, color, bg, copy = FLAG_COPY[proba >= DECISION_THRESHOLD]
 
         st.markdown(
             f"""<span style="background:{bg}; color:{color}; border:1px solid {color};
             border-radius:999px; padding:0.2rem 0.85rem; font-weight:600;
-            font-size:0.85rem;">{label} risk</span>""",
+            font-size:0.85rem;">{label}</span>""",
             unsafe_allow_html=True,
         )
         st.metric("Estimated probability of diabetes / prediabetes", f"{proba:.0%}")
-        st.caption(RISK_COPY[label])
+        st.caption(copy.format(threshold=DECISION_THRESHOLD))
 
         col1, col2 = st.columns([2, 1])
         with col1:
