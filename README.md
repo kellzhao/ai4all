@@ -2,70 +2,36 @@
 
 # Diabetes Health Indicators - Exploratory Data Analysis (BRFSS 2015) AI4ALL Group 23E
 
-This repository contains an exploratory data analysis focused on identifying relationships between various health indicators, demographic factors, and diabetes status using the 2015 Behavioral Risk Factor Surveillance System (BRFSS) dataset. The visualizations highlight the interactions between key predictors and our target variable: `Diabetes_binary`.
+**Live demo:** [ai4all-23e.streamlit.app](https://ai4all-23e.streamlit.app/)
+
+## Project Summary
+
+This project explores relationships between health indicators, demographics, and diabetes status using the 2015 CDC Behavioral Risk Factor Surveillance System (BRFSS) survey data (~253K respondents). We ran an exploratory data analysis and bias audit, then trained and compared Logistic Regression, Random Forest, and XGBoost classifiers on both a class-balanced and a real-world-imbalanced version of the data, tuning for recall since missing a true diabetic case is the costlier error in a screening context. The final XGBoost model (ROC-AUC 0.83) is deployed in a Streamlit app that returns a risk estimate along with a SHAP-based explanation of which health factors drove that individual's prediction.
 
 ---
 
-## Key Insights & Visualizations
+## Repository Contents
 
-To avoid data imbalance distortions, a balanced 50-50 split dataset (`diabetes_binary_5050split_health_indicators_BRFSS2015.csv`) was utilized for the following analysis.
+**App (deployed demo)**
+- `app/app.py` — Streamlit UI: collects a health profile and shows the predicted risk with a SHAP explanation
+- `app/explain.py` — builds the SHAP waterfall chart and plain-English driver summary
+- `app/model_io.py` — loads the trained model and feature list
+- `Dockerfile`, `docker-compose.yml`, `requirements.txt` — containerized deployment config
 
-### 1. Global Variable Correlations
-The correlation matrix heatmap provides an overarching look at how variables move together. 
-* **Top Positive Predictors:** General Health (`GenHlth`), High Blood Pressure (`HighBP`), Body Mass Index (`BMI`), and High Cholesterol (`HighChol`) share the strongest linear relationships with diabetes status.
-* **Secondary Trait Clusters:** Strong correlations also appear between physical health issues (`PhysHlth`) and difficulty walking (`DiffWalk`).
+**Model**
+- `model/model.joblib` — trained XGBoost classifier
+- `model/feature_names.json` — the 21 input features, in training order
+- `xgboost_model.ipynb` — trains the final XGBoost model and sweeps decision thresholds
+- `model_comparison_results.csv` — accuracy/recall/precision/F1/ROC-AUC for Logistic Regression, Random Forest, and XGBoost on both balanced and imbalanced data
+- `diabetes_model_comparison.ipynb` — the full model comparison and hyperparameter search behind that results table
+- `diabetes_model_basic_kelly.ipynb`, `diabetes_model_edits_kelly .ipynb`, `model_1.py`, `model_2.py` — earlier modeling iterations
 
-![Correlation Matrix Heatmap](correlation_matrix_heatmap.png)
+**Exploratory data analysis**
+- `eda_bias_audit.ipynb` — data quality checks, correlations, and a bias audit of diabetes rate by sex/age/education/income
+- `eda-visualizations.ipynb` — generates the four EDA charts (correlation heatmap, top predictors, BMI × age, income/education vs. diabetes rate)
+- `*.png` — the exported chart images used in the analysis and presentation
 
----
-
-### 2. Analysis of Primary Predictors
-Focusing on the highest-correlated indicators, the bar charts below show the proportion of individuals diagnosed with diabetes across different categories. **Bars are strictly sorted by descending prevalence** to emphasize risk tiers:
-
-* **General Health Rating:** Individuals reporting "Poor" (5) or "Fair" (4) health exhibit a drastically higher rate of diabetes compared to those reporting "Excellent" (1) health.
-* **Comorbidities:** Having high blood pressure or high cholesterol nearly doubles the statistical prevalence of diabetes within the sample population.
-
-![Top Predictors Bar Charts](top_predictors_bar_charts.png)
-
----
-
-### 3. The Compounding Risk of BMI and Age
-Because `Age` (1–13 bracket scale) and `BMI` are discrete/dense values, a standard scatter plot causes heavy overplotting. By extracting a random sample of 3,000 individuals and applying a subtle coordinate **jitter**, a clear risk transition zone emerges:
-* **The Trend:** Moving toward the upper-right quadrant (higher BMI + advanced age bracket) shows a severe, undeniable concentration of individuals with diabetes (represented in Red).
-
-![BMI vs. Age Group Scatter Plot](bmi_vs_age_scatter_jitter.png)
-
----
-
-### 4. Socioeconomic Protective Factors
-Plotting protective socioeconomic factors reveals an inverse trend with diabetes status:
-* **The Trend:** As both **Income Level** (1–8 scale) and **Education Level** (1–6 scale) increase, the proportion of diabetes diagnoses steadily and cleanly drops off, highlighting a strong negative correlation between socioeconomic status and diabetes risk.
-
-![Socioeconomic Status Line Chart](socioeconomic_vs_diabetes_line.png)
-
----
-
-## How to Generate These Plots
-
-If you want to reproduce these visualizations locally, ensure you have the dataset file present in your root directory and execute the following Python block:
-
-```python
-import pandas as pd
-import numpy as np
-import matplotlib.pyplot as plt
-import seaborn as sns
-
-# Load the 50-50 split dataset
-df = pd.read_csv('diabetes_binary_5050split_health_indicators_BRFSS2015.csv')
-sns.set_theme(style="whitegrid")
-
-# 1. Generate Correlation Matrix Heatmap
-plt.figure(figsize=(14, 11))
-corr = df.corr()
-mask = np.triu(np.ones_like(corr, dtype=bool))
-sns.heatmap(corr, mask=mask, annot=True, fmt=".2f", cmap="coolwarm")
-plt.tight_layout()
-plt.savefig('correlation_matrix_heatmap.png')
-plt.close()
-
-#
+**Data**
+- `diabetes_binary_health_indicators_BRFSS2015.csv` — full dataset, real-world class imbalance (~86%/14%)
+- `diabetes_binary_5050split_health_indicators_BRFSS2015.csv` — class-balanced 50/50 version
+- `diabetes_012_health_indicators_BRFSS2015.csv` — 3-class version (no diabetes / prediabetes / diabetes)
