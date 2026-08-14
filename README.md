@@ -3,6 +3,7 @@
 # Diabetes Health Indicators - Exploratory Data Analysis (BRFSS 2015) AI4ALL Group 23E
 
 **Live demo:** [ai4all-23e.streamlit.app](https://ai4all-23e.streamlit.app/)
+**Github page:** (https://kellzhao.github.io/ai4all/)
 
 ## Project Summary
 
