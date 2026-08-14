@@ -1,0 +1,778 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Diabetes Health Indicators — AI4ALL Group 23E</title>
+<meta name="description" content="A supervised screening model for diabetes risk, built on CDC BRFSS 2015 survey data, with an explainable Streamlit demo and a demographic bias audit.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%231baf7a'/%3E%3Cpath d='M16 6c4 5 8 10 8 14a8 8 0 1 1-16 0c0-4 4-9 8-14z' fill='%23fcfcfb'/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+
+/* ---------- Tokens ---------- */
+:root{
+  color-scheme: light;
+  --surface: #fcfcfb;
+  --page: #f9f9f7;
+  --card: #ffffff;
+  --ink: #0b0b0b;
+  --ink-2: #52514e;
+  --muted: #898781;
+  --line: #e1e0d9;
+  --accent: #1baf7a;
+  --accent-ink: #0d7a54;
+  --recall: #2a78d6;
+  --precision: #eb6834;
+  --good-bg: #e8f7e8;
+  --good-ink: #0ca30c;
+  --critical-bg: #fbe9e9;
+  --critical-ink: #d03b3b;
+  --shadow: rgba(11,11,11,0.06);
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    color-scheme: dark;
+    --surface: #1a1a19;
+    --page: #0d0d0d;
+    --card: #201f1d;
+    --ink: #ffffff;
+    --ink-2: #c3c2b7;
+    --muted: #8f8d87;
+    --line: #2c2c2a;
+    --accent: #2fcf93;
+    --accent-ink: #6fe3b8;
+    --recall: #3987e5;
+    --precision: #d95926;
+    --good-bg: #143318;
+    --good-ink: #4fd15a;
+    --critical-bg: #3a1616;
+    --critical-ink: #e88686;
+    --shadow: rgba(0,0,0,0.35);
+  }
+}
+:root[data-theme="dark"]{
+  color-scheme: dark;
+  --surface: #1a1a19;
+  --page: #0d0d0d;
+  --card: #201f1d;
+  --ink: #ffffff;
+  --ink-2: #c3c2b7;
+  --muted: #8f8d87;
+  --line: #2c2c2a;
+  --accent: #2fcf93;
+  --accent-ink: #6fe3b8;
+  --recall: #3987e5;
+  --precision: #d95926;
+  --good-bg: #143318;
+  --good-ink: #4fd15a;
+  --critical-bg: #3a1616;
+  --critical-ink: #e88686;
+  --shadow: rgba(0,0,0,0.35);
+}
+
+*{ box-sizing: border-box; }
+html{ scroll-behavior: smooth; }
+@media (prefers-reduced-motion: reduce){
+  html{ scroll-behavior: auto; }
+  *{ animation-duration: 0.001ms !important; transition-duration: 0.001ms !important; }
+}
+
+body{
+  margin: 0;
+  background: var(--page);
+  color: var(--ink);
+  font-family: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  font-size: 17px;
+  line-height: 1.65;
+  -webkit-font-smoothing: antialiased;
+}
+
+h1,h2,h3{
+  font-family: "Fraunces", Georgia, serif;
+  font-weight: 600;
+  text-wrap: balance;
+  margin: 0;
+  color: var(--ink);
+}
+
+.eyebrow{
+  font-family: "IBM Plex Mono", ui-monospace, monospace;
+  font-size: 0.75rem;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--accent-ink);
+  margin: 0 0 0.6rem;
+}
+
+a{ color: var(--accent-ink); text-decoration-thickness: 1.5px; text-underline-offset: 2px; }
+a:focus-visible, button:focus-visible{ outline: 2px solid var(--accent); outline-offset: 2px; }
+
+.wrap{ max-width: 800px; margin: 0 auto; padding: 0 24px; }
+.wrap-wide{ max-width: 1000px; margin: 0 auto; padding: 0 24px; }
+
+/* ---------- Top bar ---------- */
+.topbar{
+  position: sticky; top: 0; z-index: 20;
+  background: color-mix(in srgb, var(--page) 88%, transparent);
+  backdrop-filter: blur(8px);
+  border-bottom: 1px solid var(--line);
+}
+.topbar-inner{
+  max-width: 1000px; margin: 0 auto; padding: 0 24px;
+  height: 56px; display: flex; align-items: center; justify-content: space-between; gap: 16px;
+}
+.brand{ font-family:"IBM Plex Mono", monospace; font-size: 0.85rem; font-weight: 500; color: var(--ink); white-space: nowrap; }
+.brand span{ color: var(--muted); }
+.navlinks{ display: flex; gap: 18px; overflow-x: auto; scrollbar-width: none; }
+.navlinks::-webkit-scrollbar{ display:none; }
+.navlinks a{
+  font-family:"IBM Plex Mono", monospace; font-size: 0.78rem; color: var(--ink-2);
+  text-decoration: none; white-space: nowrap; padding: 4px 2px; border-bottom: 1.5px solid transparent;
+}
+.navlinks a:hover{ color: var(--ink); border-color: var(--accent); }
+.theme-toggle{
+  border: 1px solid var(--line); background: var(--card); color: var(--ink);
+  width: 32px; height: 32px; border-radius: 8px; display: grid; place-items: center;
+  cursor: pointer; flex: none;
+}
+.theme-toggle:hover{ border-color: var(--accent); }
+.theme-toggle svg{ width: 16px; height: 16px; }
+
+/* ---------- Hero ---------- */
+.hero{ padding: 64px 0 40px; }
+.hero .eyebrow{ display:flex; align-items:center; gap:8px; }
+.hero .eyebrow::before{ content:""; width:6px; height:6px; border-radius:50%; background: var(--accent); }
+.hero h1{ font-size: clamp(2rem, 4.5vw, 3rem); line-height: 1.08; max-width: 14ch; }
+.hero p.lede{ font-size: 1.15rem; color: var(--ink-2); max-width: 62ch; margin-top: 18px; }
+
+.hero-actions{ display:flex; flex-wrap: wrap; gap: 12px; margin-top: 28px; }
+.btn{
+  font-family:"IBM Plex Sans", sans-serif; font-weight: 500; font-size: 0.92rem;
+  padding: 10px 18px; border-radius: 8px; text-decoration: none; display: inline-flex; align-items:center; gap:8px;
+  border: 1px solid transparent; transition: transform 0.12s ease, border-color 0.12s ease;
+}
+.btn:hover{ transform: translateY(-1px); }
+.btn-primary{ background: var(--accent); color: #06231a; }
+.btn-secondary{ background: transparent; color: var(--ink); border-color: var(--line); }
+.btn-secondary:hover{ border-color: var(--accent-ink); }
+
+.stat-row{ display:flex; flex-wrap: wrap; gap: 28px; margin-top: 44px; padding-top: 28px; border-top: 1px solid var(--line); }
+.stat{ min-width: 140px; }
+.stat .v{ font-family:"Fraunces", serif; font-size: 2.1rem; font-weight: 600; line-height:1; }
+.stat .l{ font-family:"IBM Plex Mono", monospace; font-size: 0.72rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.06em; margin-top: 8px; }
+
+/* ---------- Sections ---------- */
+section{ padding: 56px 0; border-top: 1px solid var(--line); }
+section#top{ border-top: none; }
+.section-head{ margin-bottom: 28px; }
+.section-head h2{ font-size: clamp(1.5rem, 3vw, 1.9rem); }
+p{ color: var(--ink-2); }
+.prose p + p{ margin-top: 1rem; }
+.prose strong{ color: var(--ink); }
+
+/* ---------- Timeline ---------- */
+.timeline{ list-style:none; margin: 24px 0 0; padding:0; border-left: 2px solid var(--line); }
+.timeline li{ position: relative; padding: 0 0 26px 24px; }
+.timeline li:last-child{ padding-bottom: 0; }
+.timeline li::before{
+  content:""; position:absolute; left:-6.5px; top:4px; width:11px; height:11px; border-radius:50%;
+  background: var(--surface); border: 2px solid var(--accent);
+}
+.timeline .t-date{ font-family:"IBM Plex Mono", monospace; font-size: 0.75rem; color: var(--muted); }
+.timeline .t-title{ font-weight: 600; margin-top: 2px; }
+.timeline .t-body{ color: var(--ink-2); font-size: 0.95rem; margin-top: 4px; }
+
+/* ---------- Figures ---------- */
+figure{ margin: 28px 0 0; }
+figure img{ width: 100%; display:block; border-radius: 10px; border: 1px solid var(--line); background: var(--card); }
+figcaption{
+  font-family:"IBM Plex Mono", monospace; font-size: 0.78rem; color: var(--muted);
+  margin-top: 10px; line-height: 1.5;
+}
+figcaption b{ color: var(--ink-2); font-weight: 500; }
+
+/* ---------- Cards / grid ---------- */
+.grid-2{ display:grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+.grid-3{ display:grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+@media (max-width: 720px){ .grid-2, .grid-3{ grid-template-columns: 1fr; } }
+
+.card{
+  background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 20px;
+}
+.card h3{ font-size: 1.05rem; }
+.card .card-label{ font-family:"IBM Plex Mono", monospace; font-size: 0.7rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.06em; }
+
+/* ---------- Tables ---------- */
+.table-scroll{ overflow-x: auto; margin-top: 20px; border: 1px solid var(--line); border-radius: 10px; }
+table{ width: 100%; border-collapse: collapse; font-size: 0.88rem; min-width: 560px; }
+th, td{ text-align: left; padding: 10px 14px; border-bottom: 1px solid var(--line); font-variant-numeric: tabular-nums; }
+th{ font-family:"IBM Plex Mono", monospace; font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted); font-weight: 500; background: var(--surface); }
+tbody tr:last-child td{ border-bottom: none; }
+tr.hi td{ background: color-mix(in srgb, var(--accent) 10%, transparent); font-weight: 600; }
+td.num, th.num{ text-align: right; }
+
+.mini-table{ width:100%; border-collapse: collapse; font-size: 0.85rem; }
+.mini-table th{ font-family:"IBM Plex Mono", monospace; font-size:0.68rem; text-transform:uppercase; letter-spacing:0.05em; color: var(--muted); text-align:left; font-weight:500; padding: 6px 4px; border-bottom: 1px solid var(--line); }
+.mini-table td{ padding: 6px 4px; border-bottom: 1px solid var(--line); font-variant-numeric: tabular-nums; }
+.mini-table td.num{ text-align:right; }
+.mini-table tbody tr:last-child td{ border-bottom:none; }
+
+/* ---------- Chart ---------- */
+.chart-card{ background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 24px; margin-top: 20px; }
+.chart-legend{ display:flex; gap: 20px; font-family:"IBM Plex Mono", monospace; font-size: 0.78rem; color: var(--ink-2); margin-bottom: 6px; }
+.chart-legend .lg{ display:flex; align-items:center; gap: 7px; }
+.chart-legend .sw{ width: 12px; height: 3px; border-radius: 2px; display:inline-block; }
+.chart-note{ font-size: 0.82rem; color: var(--muted); margin-top: 14px; }
+
+/* ---------- Pills (illustrative app output) ---------- */
+.pill{
+  display:inline-flex; align-items:center; padding: 4px 14px; border-radius: 999px;
+  font-weight: 600; font-size: 0.82rem; border: 1px solid currentColor;
+}
+.pill-critical{ background: var(--critical-bg); color: var(--critical-ink); }
+.pill-good{ background: var(--good-bg); color: var(--good-ink); }
+.mock-app{ background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 22px; margin-top: 20px; }
+.mock-row{ display:flex; align-items: center; justify-content: space-between; gap: 16px; padding: 14px 0; border-bottom: 1px dashed var(--line); }
+.mock-row:last-child{ border-bottom: none; }
+.mock-row .m-label{ font-size: 0.92rem; color: var(--ink-2); }
+.mock-row .m-value{ font-family:"IBM Plex Mono", monospace; font-weight: 500; }
+
+/* ---------- Lists ---------- */
+.check-list{ list-style: none; margin: 0; padding: 0; display: grid; gap: 12px; }
+.check-list li{ display: flex; gap: 12px; align-items: flex-start; }
+.check-list li::before{
+  content:""; flex: none; width: 8px; height: 8px; margin-top: 8px; border-radius: 2px; background: var(--accent);
+}
+
+.pro-con{ display:grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-top: 20px; }
+@media (max-width: 640px){ .pro-con{ grid-template-columns: 1fr; } }
+.pro-con .card-label{ display:block; margin-bottom: 10px; }
+.pro-con ul{ margin: 0; padding-left: 18px; color: var(--ink-2); font-size: 0.93rem; }
+.pro-con li + li{ margin-top: 6px; }
+
+/* ---------- Citations ---------- */
+.cite-list{ list-style: none; margin: 20px 0 0; padding: 0; counter-reset: cite; display: grid; gap: 16px; }
+.cite-list li{ counter-increment: cite; position: relative; padding-left: 32px; font-size: 0.94rem; color: var(--ink-2); }
+.cite-list li::before{
+  content: counter(cite); position:absolute; left:0; top: 0.05em;
+  font-family:"IBM Plex Mono", monospace; font-size: 0.78rem; color: var(--accent-ink);
+  border: 1px solid var(--line); width: 20px; height: 20px; border-radius: 5px; display:grid; place-items:center;
+}
+.cite-list .cite-note{ font-size: 0.82rem; color: var(--muted); display:block; margin-top: 2px; }
+
+/* ---------- Footer ---------- */
+footer{ padding: 40px 0 60px; border-top: 1px solid var(--line); }
+.footer-grid{ display:flex; flex-wrap: wrap; justify-content: space-between; gap: 24px; align-items: flex-start; }
+.footer-grid .fmeta{ color: var(--muted); font-size: 0.85rem; font-family:"IBM Plex Mono", monospace; }
+.footer-links{ display:flex; gap: 18px; }
+.footer-links a{ color: var(--ink-2); font-size: 0.9rem; }
+
+.reveal{ opacity: 0; transform: translateY(10px); transition: opacity 0.5s ease, transform 0.5s ease; }
+.reveal.in{ opacity: 1; transform: none; }
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="topbar-inner">
+    <div class="brand">AI4ALL<span> · Group 23E</span></div>
+    <nav class="navlinks">
+      <a href="#overview">Overview</a>
+      <a href="#data">Data &amp; EDA</a>
+      <a href="#algorithm">Algorithm</a>
+      <a href="#evaluation">Evaluation</a>
+      <a href="#demo">Demo</a>
+      <a href="#impact">Impact &amp; Bias</a>
+      <a href="#citations">Citations</a>
+      <a href="#next">Next Steps</a>
+    </nav>
+    <button class="theme-toggle" id="themeToggle" aria-label="Toggle color theme" type="button">
+      <svg id="iconSun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>
+      <svg id="iconMoon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" style="display:none"><path d="M20 14.5A8 8 0 1 1 9.5 4a6.5 6.5 0 0 0 10.5 10.5z"/></svg>
+    </button>
+  </div>
+</div>
+
+<section id="top" class="hero">
+  <div class="wrap">
+    <p class="eyebrow">CDC BRFSS 2015 · Supervised Screening Model</p>
+    <h1>Predicting diabetes risk from self-reported health survey data</h1>
+    <p class="lede">
+      A screening tool that estimates diabetes risk from 21 health, lifestyle, and demographic
+      indicators, tuned to catch true cases rather than to be accurate on average — and
+      audited for who it under- and over-serves along the way.
+    </p>
+    <div class="hero-actions">
+      <a class="btn btn-primary" href="https://ai4all-23e.streamlit.app/" target="_blank" rel="noopener">Try the live demo →</a>
+      <a class="btn btn-secondary" href="https://github.com/kellzhao/ai4all" target="_blank" rel="noopener">View the code on GitHub</a>
+    </div>
+    <div class="stat-row">
+      <div class="stat"><div class="v">0.83</div><div class="l">ROC&nbsp;AUC, XGBoost</div></div>
+      <div class="stat"><div class="v">92%</div><div class="l">Recall at deployed threshold</div></div>
+      <div class="stat"><div class="v">253,680</div><div class="l">Survey respondents</div></div>
+      <div class="stat"><div class="v">21</div><div class="l">Input features</div></div>
+    </div>
+  </div>
+</section>
+
+<section id="overview">
+  <div class="wrap">
+    <div class="section-head">
+      <p class="eyebrow">01 · Project Overview</p>
+      <h2>What we built, and why</h2>
+    </div>
+    <div class="prose">
+      <p>
+        The CDC's <strong>Behavioral Risk Factor Surveillance System (BRFSS)</strong> is an annual
+        telephone survey of U.S. adults on health behaviors and chronic conditions. Its 2015 wave
+        includes <strong>253,680 respondents</strong> and 21 health, lifestyle, and demographic
+        indicators alongside a diabetes diagnosis label. We used this dataset to explore a question
+        with real screening value: <strong>can a small set of self-reported indicators — blood
+        pressure, cholesterol, BMI, general health, income, and similar — flag people who are
+        likely undiagnosed or at risk for diabetes?</strong>
+      </p>
+      <p>
+        The project moved through four phases. We started with <strong>exploratory data analysis
+        and a demographic bias audit</strong>, checking data quality and how diabetes prevalence
+        varies by sex, age, education, and income before any modeling began. From there we ran a
+        <strong>systematic comparison</strong> of three algorithms — Logistic Regression, Random
+        Forest, and XGBoost — across both the raw, real-world-imbalanced data and an artificially
+        balanced version, scoring on recall rather than accuracy. That comparison surfaced the
+        project's central tension: on realistically imbalanced data, precision collapsed to
+        roughly 30% even though recall stayed strong. We addressed that with <strong>class
+        weighting and explicit decision-threshold tuning</strong>, then closed the loop by
+        <strong>deploying the final model</strong> behind a Streamlit app with a per-prediction
+        SHAP explanation, containerized with Docker.
+      </p>
+    </div>
+
+    <ul class="timeline">
+      <li>
+        <div class="t-date">Jul 2026</div>
+        <div class="t-title">EDA &amp; demographic bias audit</div>
+        <div class="t-body">Data quality checks, correlation analysis, and a bias audit of diabetes rate by sex, age, education, and income — before any model was trained.</div>
+      </li>
+      <li>
+        <div class="t-date">Jul 2026</div>
+        <div class="t-title">Baseline models</div>
+        <div class="t-body">First single-model passes to validate the pipeline end to end.</div>
+      </li>
+      <li>
+        <div class="t-date">Jul 2026</div>
+        <div class="t-title">Three-model, two-dataset comparison</div>
+        <div class="t-body">Logistic Regression, Random Forest, and XGBoost, grid-searched with stratified k-fold, scored on recall — on both balanced and real-world-imbalanced data.</div>
+      </li>
+      <li>
+        <div class="t-date">Jul–Aug 2026</div>
+        <div class="t-title">The imbalance problem, and fixing it</div>
+        <div class="t-body">Precision fell to ~30% on realistic data. Addressed with <code>scale_pos_weight</code> class weighting and a threshold sweep, landing on τ = 0.30 to prioritize recall.</div>
+      </li>
+      <li>
+        <div class="t-date">Aug 2026</div>
+        <div class="t-title">Deployment</div>
+        <div class="t-body">Final XGBoost model exported and served through a Streamlit app with SHAP-based, per-person explanations; containerized and deployed to Streamlit Cloud.</div>
+      </li>
+    </ul>
+  </div>
+</section>
+
+<section id="data">
+  <div class="wrap">
+    <div class="section-head">
+      <p class="eyebrow">02 · Data &amp; Exploratory Analysis</p>
+      <h2>What the data actually shows</h2>
+    </div>
+    <div class="prose">
+      <p>
+        The dataset ships pre-cleaned — zero missing values across all 253,680 rows — but is
+        heavily imbalanced: only <strong>13.9%</strong> of respondents report a diabetes or
+        prediabetes diagnosis. We worked with two versions throughout: the full imbalanced set,
+        and a 50/50-balanced subsample (70,692 rows) used to check how much that imbalance was
+        distorting our metrics.
+      </p>
+    </div>
+
+    <figure>
+      <img src="correlation_matrix_heatmap.png" alt="Correlation matrix heatmap of the 21 BRFSS health indicators against diabetes status.">
+      <figcaption><b>Fig. 1</b> — Correlation matrix across all 21 indicators. General health rating, high blood pressure, BMI, and high cholesterol carry the strongest linear relationships with diabetes status; physical-health days and difficulty walking form a secondary cluster.</figcaption>
+    </figure>
+
+    <div class="grid-2" style="margin-top:28px;">
+      <div class="card">
+        <span class="card-label">Strongest positive correlation</span>
+        <table class="mini-table" style="margin-top:10px;">
+          <thead><tr><th>Indicator</th><th class="num">r</th></tr></thead>
+          <tbody>
+            <tr><td>General health rating</td><td class="num">0.294</td></tr>
+            <tr><td>High blood pressure</td><td class="num">0.263</td></tr>
+            <tr><td>Difficulty walking</td><td class="num">0.218</td></tr>
+            <tr><td>BMI</td><td class="num">0.217</td></tr>
+            <tr><td>High cholesterol</td><td class="num">0.200</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="card">
+        <span class="card-label">Strongest negative correlation</span>
+        <table class="mini-table" style="margin-top:10px;">
+          <thead><tr><th>Indicator</th><th class="num">r</th></tr></thead>
+          <tbody>
+            <tr><td>Income level</td><td class="num">−0.164</td></tr>
+            <tr><td>Education level</td><td class="num">−0.124</td></tr>
+            <tr><td>Physical activity</td><td class="num">−0.118</td></tr>
+            <tr><td>Heavy alcohol use*</td><td class="num">−0.057</td></tr>
+            <tr><td>Vegetable intake</td><td class="num">−0.057</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+    <p class="chart-note" style="margin-top:8px;">*Likely a confound (younger, healthier respondents drink more) rather than a protective effect — flagged as a sanity-check finding, not a causal claim.</p>
+  </div>
+</section>
+
+<section id="algorithm">
+  <div class="wrap">
+    <div class="section-head">
+      <p class="eyebrow">03 · Algorithm</p>
+      <h2>XGBoost, chosen by comparison</h2>
+    </div>
+    <div class="prose">
+      <p>
+        This is a <strong>supervised, binary classification</strong> problem: given a respondent's
+        health profile, predict whether they have diabetes or prediabetes. We compared three
+        algorithms head-to-head — <strong>Logistic Regression, Random Forest, and XGBoost</strong> —
+        each wrapped in a scaling pipeline and grid-searched with 5-fold stratified cross-validation,
+        <strong>scored on recall</strong> rather than accuracy, since a missed diabetic (a false
+        negative) is the costlier error in a screening context.
+      </p>
+      <p>
+        <strong>Inputs:</strong> 21 features — binary conditions and lifestyle flags (high blood
+        pressure, high cholesterol, smoking, physical activity, diet, healthcare access), ordinal
+        ratings (general health, age bracket, education, income), and continuous measures (BMI,
+        days of poor physical/mental health). <strong>Output:</strong> a predicted probability of
+        diabetes/prediabetes, thresholded to a binary flag at inference time.
+      </p>
+    </div>
+
+    <div class="table-scroll">
+      <table>
+        <thead>
+          <tr><th>Dataset</th><th>Model</th><th class="num">Accuracy</th><th class="num">Recall</th><th class="num">Precision</th><th class="num">F1</th><th class="num">ROC AUC</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>Balanced 50/50</td><td>Logistic Regression</td><td class="num">0.746</td><td class="num">0.764</td><td class="num">0.737</td><td class="num">0.750</td><td class="num">0.823</td></tr>
+          <tr><td>Balanced 50/50</td><td>Random Forest</td><td class="num">0.749</td><td class="num">0.794</td><td class="num">0.728</td><td class="num">0.760</td><td class="num">0.826</td></tr>
+          <tr class="hi"><td>Balanced 50/50</td><td>XGBoost</td><td class="num">0.752</td><td class="num">0.799</td><td class="num">0.730</td><td class="num">0.763</td><td class="num">0.830</td></tr>
+          <tr><td>Imbalanced</td><td>Logistic Regression</td><td class="num">0.732</td><td class="num">0.761</td><td class="num">0.311</td><td class="num">0.441</td><td class="num">0.820</td></tr>
+          <tr><td>Imbalanced</td><td>Random Forest</td><td class="num">0.719</td><td class="num">0.779</td><td class="num">0.303</td><td class="num">0.436</td><td class="num">0.820</td></tr>
+          <tr><td>Imbalanced</td><td>XGBoost</td><td class="num">0.724</td><td class="num">0.785</td><td class="num">0.308</td><td class="num">0.442</td><td class="num">0.826</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="chart-note">Highlighted row: best ROC AUC of the six runs, and the family (XGBoost) we carried forward to deployment.</p>
+
+    <div class="pro-con">
+      <div class="card">
+        <span class="card-label">Why XGBoost</span>
+        <ul>
+          <li>Best ROC AUC in both the balanced and imbalanced comparison</li>
+          <li><code>scale_pos_weight</code> handles class imbalance natively, without discarding data</li>
+          <li>Captures nonlinear feature interactions Logistic Regression can't</li>
+          <li>Native support for SHAP's <code>TreeExplainer</code>, so predictions stay explainable</li>
+        </ul>
+      </div>
+      <div class="card">
+        <span class="card-label">Trade-offs</span>
+        <ul>
+          <li>Less inherently interpretable than Logistic Regression's odds ratios — SHAP is doing real work here</li>
+          <li>More hyperparameters to tune, more surface area to overfit on the smaller balanced set</li>
+          <li>Marginal gain over Random Forest was small; a simpler model was a defensible alternative</li>
+        </ul>
+      </div>
+    </div>
+
+    <figure>
+      <img src="rf_feature_importance.png" alt="Random Forest feature importance bar chart for the diabetes model.">
+      <figcaption><b>Fig. 3</b> — Random Forest feature importance on the imbalanced data. The ranking cross-validates the correlation analysis and Logistic Regression's odds ratios: general health, BMI, age, high blood pressure, and high cholesterol dominate across every method we tried, which is a good sign the signal is real rather than an artifact of one algorithm.</figcaption>
+    </figure>
+  </div>
+</section>
+
+<section id="evaluation">
+  <div class="wrap">
+    <div class="section-head">
+      <p class="eyebrow">04 · Model Evaluation</p>
+      <h2>Choosing a threshold, on purpose</h2>
+    </div>
+    <div class="prose">
+      <p>
+        A 0.50 cutoff is the default, not a decision. We swept the deployed XGBoost model's
+        threshold from 0.50 down to 0.30 and tracked how recall and precision moved against each
+        other. Lower thresholds flag more people as at-risk — recall climbs, precision falls.
+      </p>
+    </div>
+
+    <div class="chart-card">
+      <div class="chart-legend">
+        <span class="lg"><span class="sw" style="background:var(--recall)"></span>Recall</span>
+        <span class="lg"><span class="sw" style="background:var(--precision)"></span>Precision</span>
+      </div>
+      <svg viewBox="0 0 640 300" role="img" aria-labelledby="threshTitle threshDesc" style="width:100%; height:auto;">
+        <title id="threshTitle">Recall and precision across four decision thresholds</title>
+        <desc id="threshDesc">At threshold 0.30, recall is 92% and precision is 24%. At the default threshold 0.50, recall is 79% and precision is 30%. Recall falls and precision rises as the threshold increases.</desc>
+        <g stroke="var(--line)" stroke-width="1">
+          <line x1="60" y1="240" x2="580" y2="240"/>
+          <line x1="60" y1="185" x2="580" y2="185"/>
+          <line x1="60" y1="130" x2="580" y2="130"/>
+          <line x1="60" y1="75"  x2="580" y2="75"/>
+          <line x1="60" y1="20"  x2="580" y2="20"/>
+        </g>
+        <g font-family="IBM Plex Mono, monospace" font-size="11" fill="var(--muted)">
+          <text x="48" y="244" text-anchor="end">0%</text>
+          <text x="48" y="189" text-anchor="end">25%</text>
+          <text x="48" y="134" text-anchor="end">50%</text>
+          <text x="48" y="79"  text-anchor="end">75%</text>
+          <text x="48" y="24"  text-anchor="end">100%</text>
+        </g>
+        <polyline points="60,38 233,42 407,49 580,66" fill="none" stroke="var(--recall)" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
+        <polyline points="60,187 233,184 407,180 580,173" fill="none" stroke="var(--precision)" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
+        <g>
+          <circle cx="60" cy="38" r="5" fill="var(--recall)" stroke="var(--card)" stroke-width="2"/>
+          <circle cx="233" cy="42" r="5" fill="var(--recall)" stroke="var(--card)" stroke-width="2"/>
+          <circle cx="407" cy="49" r="5" fill="var(--recall)" stroke="var(--card)" stroke-width="2"/>
+          <circle cx="580" cy="66" r="5" fill="var(--recall)" stroke="var(--card)" stroke-width="2"/>
+          <circle cx="60" cy="187" r="5" fill="var(--precision)" stroke="var(--card)" stroke-width="2"/>
+          <circle cx="233" cy="184" r="5" fill="var(--precision)" stroke="var(--card)" stroke-width="2"/>
+          <circle cx="407" cy="180" r="5" fill="var(--precision)" stroke="var(--card)" stroke-width="2"/>
+          <circle cx="580" cy="173" r="5" fill="var(--precision)" stroke="var(--card)" stroke-width="2"/>
+        </g>
+        <g font-family="IBM Plex Mono, monospace" font-size="12" font-weight="500">
+          <text x="60" y="26" fill="var(--recall)" text-anchor="middle">92%</text>
+          <text x="580" y="58" fill="var(--recall)" text-anchor="middle">79%</text>
+          <text x="60" y="205" fill="var(--precision)" text-anchor="middle">24%</text>
+          <text x="580" y="160" fill="var(--precision)" text-anchor="middle">30%</text>
+        </g>
+        <g font-family="IBM Plex Mono, monospace" font-size="11" fill="var(--ink-2)" text-anchor="middle">
+          <text x="60" y="264">τ = 0.30</text>
+          <text x="233" y="264">0.35</text>
+          <text x="407" y="264">0.40</text>
+          <text x="580" y="264">0.50</text>
+        </g>
+        <text x="60" y="280" font-family="IBM Plex Mono, monospace" font-size="10.5" fill="var(--accent-ink)" text-anchor="middle">↑ deployed</text>
+      </svg>
+      <p class="chart-note">Fig. 4 — Threshold sweep on the held-out test set (imbalanced data, XGBoost). We deployed τ = 0.30: 92% recall at 24% precision, deliberately over-flagging rather than under-flagging.</p>
+    </div>
+
+    <div class="prose" style="margin-top:24px;">
+      <p>
+        We chose τ = 0.30 because a screening tool's job is to prompt a conversation with a
+        provider, not to diagnose — a false positive costs a follow-up question; a false negative
+        costs a missed case. That said, <strong>at this threshold roughly 3 in 4 positive flags are
+        false alarms</strong>. The app is built around that honestly: it reports a probability and
+        an explanation, not a yes/no diagnosis, and says so explicitly on screen.
+      </p>
+    </div>
+  </div>
+</section>
+
+<section id="demo">
+  <div class="wrap">
+    <div class="section-head">
+      <p class="eyebrow">05 · Demo</p>
+      <h2>What the app shows you</h2>
+    </div>
+    <div class="prose">
+      <p>
+        The deployed <a href="https://ai4all-23e.streamlit.app/" target="_blank" rel="noopener">Streamlit app</a>
+        collects a health profile through a sidebar form, runs it through the exported XGBoost
+        model, and returns a probability alongside a <strong>SHAP waterfall chart</strong> showing
+        which inputs pushed the estimate up or down — so the output is a set of reasons, not just
+        a number.
+      </p>
+    </div>
+    <div class="mock-app" aria-label="Illustrative example of the app's two output states">
+      <div class="mock-row">
+        <span class="m-label">Estimated probability of diabetes / prediabetes</span>
+        <span class="pill pill-critical">Elevated · 61%</span>
+      </div>
+      <div class="mock-row">
+        <span class="m-label">Top drivers (example)</span>
+        <span class="m-value">GenHlth, BMI, HighBP ↑</span>
+      </div>
+      <div class="mock-row">
+        <span class="m-label">Below-threshold example</span>
+        <span class="pill pill-good">Below threshold · 9%</span>
+      </div>
+    </div>
+    <p class="chart-note">Illustrative mock-up of the app's two flag states, not a live screenshot — try the <a href="https://ai4all-23e.streamlit.app/" target="_blank" rel="noopener">real thing here</a>.</p>
+  </div>
+</section>
+
+<section id="impact">
+  <div class="wrap">
+    <div class="section-head">
+      <p class="eyebrow">06 · Impact &amp; Bias</p>
+      <h2>Where this helps, where it can hurt</h2>
+    </div>
+
+    <div class="grid-2">
+      <div class="card">
+        <span class="card-label">Positive impact</span>
+        <p style="margin-top:10px; font-size:0.95rem;">
+          A free, low-friction screening step could reach people who face real barriers to care —
+          in our own data, respondents who reported skipping a doctor visit due to cost still had
+          a measurable diabetes signal in the other 20 features. Recall-first tuning and an
+          explainable output (not a black-box score) are both deliberate choices to make the tool
+          useful as a prompt to seek care, not a replacement for it.
+        </p>
+      </div>
+      <div class="card">
+        <span class="card-label">Negative impact</span>
+        <p style="margin-top:10px; font-size:0.95rem;">
+          At τ = 0.30, about 3 of every 4 positive flags are false alarms — deployed carelessly,
+          that's alarm fatigue, unnecessary anxiety, and unnecessary healthcare-system load. A
+          probability score can also be misread as a diagnosis, and self-reported survey data
+          trained models risk quietly encoding whatever biases already exist in who gets
+          diagnosed and who gets to answer a phone survey in the first place.
+        </p>
+      </div>
+    </div>
+
+    <figure>
+      <img src="socioeconomic_vs_diabetes_line.png" alt="Line chart showing diabetes rate declining as income and education level increase.">
+      <figcaption><b>Fig. 2</b> — Diabetes rate by income and education level. Rate falls from 24.3% at the lowest income bracket to 8.0% at the highest, and from 27.0% at the lowest education level to 9.7% at college graduates — a socioeconomic gradient nearly as steep as any single health indicator we measured.</figcaption>
+    </figure>
+
+    <div class="prose" style="margin-top:28px;">
+      <h3 style="font-size:1.15rem; margin-bottom:10px;">Essential question: how does building this amplify or mitigate bias?</h3>
+      <p>
+        <strong>It does both, and the direction depends on choices we made, not on the algorithm
+        itself.</strong> Income and education are among the strongest predictors in the model —
+        which means the model is partly learning a socioeconomic pattern, not a purely biological
+        one. BRFSS is also a telephone survey, which structurally under-reaches people without
+        stable phone access — often the same lower-income households the data shows as
+        higher-risk. Deployed without care, a tool like this can reinforce the idea that
+        under-resourced groups are simply "higher risk," without surfacing <em>why</em>, and
+        without ever checking whether it performs equally well across those groups. We did not
+        evaluate recall or precision <em>per subgroup</em> — only in aggregate — which is a real
+        limitation of this project, not a solved problem.
+      </p>
+      <p>
+        On the mitigation side, choosing to optimize for <strong>recall over accuracy</strong> was
+        itself a bias-aware decision: an accuracy-first model looks better on paper but
+        systematically under-catches the minority (diabetic) class, which historically correlates
+        with the same under-resourced groups. Pairing that with SHAP explanations means the tool
+        never just says "high risk" — it says <em>why</em>, which gives a person or a clinician
+        something to question rather than something to simply accept. Neither of these fixes the
+        upstream sampling and self-report issues baked into the data itself; they only change how
+        responsibly the model built on top of that data behaves.
+      </p>
+    </div>
+  </div>
+</section>
+
+<section id="citations">
+  <div class="wrap">
+    <div class="section-head">
+      <p class="eyebrow">07 · Citations &amp; Data Source</p>
+      <h2>Sources</h2>
+    </div>
+    <ol class="cite-list">
+      <li>
+        Centers for Disease Control and Prevention. <em>Behavioral Risk Factor Surveillance
+        System — 2015 Survey Data and Documentation.</em>
+        <a href="https://www.cdc.gov/brfss/annual_data/annual_2015.html" target="_blank" rel="noopener">cdc.gov/brfss/annual_data/annual_2015.html</a>
+        <span class="cite-note">Primary data source — original 2015 BRFSS survey data and codebook.</span>
+      </li>
+      <li>
+        Teboul, A. <em>Diabetes Health Indicators Dataset.</em> Kaggle.
+        <a href="https://www.kaggle.com/datasets/alexteboul/diabetes-health-indicators-dataset" target="_blank" rel="noopener">kaggle.com/datasets/alexteboul/diabetes-health-indicators-dataset</a>
+        <span class="cite-note">Cleaned, model-ready CSV export of the BRFSS 2015 data used directly in this project — confirm this matches your exact download before publishing.</span>
+      </li>
+      <li>
+        Chen, T., &amp; Guestrin, C. (2016). <em>XGBoost: A Scalable Tree Boosting System.</em>
+        Proceedings of the 22nd ACM SIGKDD International Conference on Knowledge Discovery and
+        Data Mining. <a href="https://arxiv.org/abs/1603.02754" target="_blank" rel="noopener">arxiv.org/abs/1603.02754</a>
+        <span class="cite-note">The algorithm behind the deployed model.</span>
+      </li>
+      <li>
+        Lundberg, S. M., &amp; Lee, S.-I. (2017). <em>A Unified Approach to Interpreting Model
+        Predictions.</em> Advances in Neural Information Processing Systems 30.
+        <a href="https://arxiv.org/abs/1705.07874" target="_blank" rel="noopener">arxiv.org/abs/1705.07874</a>
+        <span class="cite-note">SHAP — the explainability method behind the demo app's waterfall chart.</span>
+      </li>
+    </ol>
+    <p class="chart-note" style="margin-top:18px;">Add your group's remaining sources here — CDC diabetes statistics, any papers discussed in team meetings, etc. — to round out the citation count.</p>
+  </div>
+</section>
+
+<section id="next">
+  <div class="wrap">
+    <div class="section-head">
+      <p class="eyebrow">08 · Next Steps</p>
+      <h2>What's left</h2>
+    </div>
+    <ul class="check-list">
+      <li><strong>Subgroup-level fairness evaluation</strong> — recompute recall/precision split by income, education, age, and sex, not just in aggregate, to check the model isn't quietly under-catching any one group.</li>
+      <li><strong>Extend to the 3-class label</strong> — the dataset separating prediabetes from diabetes is already loaded in the EDA notebook but hasn't been modeled yet.</li>
+      <li><strong>Try resampling as an alternative to class weighting</strong> — compare SMOTE against the current <code>scale_pos_weight</code> approach to see whether it changes the precision/recall trade-off at deployment.</li>
+      <li><strong>Harden the deployment</strong> — the app currently has no rate-limiting or usage monitoring before wider release.</li>
+    </ul>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap footer-grid">
+    <div>
+      <div class="brand">AI4ALL Group 23E</div>
+      <div class="fmeta" style="margin-top:6px;">Diabetes Health Indicators — BRFSS 2015<br>Team members: <em>Kelly Zhao, Eugene Taabazuing</em></div>
+    </div>
+    <div class="footer-links">
+      <a href="https://github.com/kellzhao/ai4all" target="_blank" rel="noopener">GitHub Repository</a>
+      <a href="https://ai4all-23e.streamlit.app/" target="_blank" rel="noopener">Live Demo</a>
+      <a href="#top">Back to top ↑</a>
+    </div>
+  </div>
+</footer>
+
+<script>
+(function(){
+  var root = document.documentElement;
+  var btn = document.getElementById('themeToggle');
+  var sun = document.getElementById('iconSun');
+  var moon = document.getElementById('iconMoon');
+  var stored = localStorage.getItem('theme');
+  if (stored) root.setAttribute('data-theme', stored);
+
+  function currentIsDark(){
+    var attr = root.getAttribute('data-theme');
+    if (attr === 'dark') return true;
+    if (attr === 'light') return false;
+    return window.matchMedia('(prefers-color-scheme: dark)').matches;
+  }
+  function sync(){
+    var dark = currentIsDark();
+    sun.style.display = dark ? 'none' : 'block';
+    moon.style.display = dark ? 'block' : 'none';
+  }
+  sync();
+  btn.addEventListener('click', function(){
+    var next = currentIsDark() ? 'light' : 'dark';
+    root.setAttribute('data-theme', next);
+    localStorage.setItem('theme', next);
+    sync();
+  });
+
+  var els = document.querySelectorAll('.hero, section');
+  if ('IntersectionObserver' in window){
+    var io = new IntersectionObserver(function(entries){
+      entries.forEach(function(e){ if (e.isIntersecting) e.target.classList.add('in'); });
+    }, { threshold: 0.08 });
+    els.forEach(function(el){ el.classList.add('reveal'); io.observe(el); });
+  }
+})();
+</script>
+
+</body>
+</html>
